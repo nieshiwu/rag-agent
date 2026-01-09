@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Optional
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage
@@ -20,10 +21,40 @@ class AgentCallbackHandler(BaseCallbackHandler):
         tool_name = serialized.get("name") if serialized else "Unknown Tool"
         print(f"\n🤖 [Agent Decision]")
         print(f"   Tool: {tool_name}")
-        print(f"   Input: {input_str}")
+        
+        # Optimize display: show default top_k if not present for knowledge_base_search
+        if tool_name == "knowledge_base_search":
+            try:
+                # Handle cases where input_str is a JSON string
+                if input_str.strip().startswith("{"):
+                    inputs = json.loads(input_str)
+                    # if "top_k" not in inputs:
+                    #     inputs["top_k"] = "3 (default)"
+                    print(f"   Input: {inputs}")
+                else:
+                    print(f"   Input: {input_str}")
+            except:
+                print(f"   Input: {input_str}")
+        else:
+            print(f"   Input: {input_str}")
 
     def on_tool_end(self, output: Any, **kwargs: Any) -> None:
         """Run when tool ends running."""
+        # Check if we should suppress logging for specific tools or if LangChain is triggering multiple events
+        # For now, let's keep it simple. If we see duplication, it might be because the tool itself prints AND the callback prints.
+        # But we already removed prints from tools.
+        
+        # The issue might be that 'output' is sometimes the full ToolMessage object and sometimes the string content,
+        # and LangGraph might be emitting events for both the tool execution and the node update.
+        
+        # However, looking at the user log:
+        # One output is raw text: "Result: 今天..."
+        # One output is JSON: "Result: [ { "content": ... } ]"
+        
+        # This suggests that maybe the AgentCallbackHandler is printing the raw output,
+        # AND the tool itself was printing something before we cleaned it up?
+        # OR, maybe LangChain's default verbose=True is on?
+        
         print(f"\n🛠️  [Tool Output]")
         
         # Extract string content from output

@@ -9,6 +9,7 @@
 *   **智能路由**：自动判断用户意图，选择合适的工具（Knowledge Base 或 Internet Search）。
 *   **混合检索**：支持关键词检索、语义检索和混合检索模式（由 LLM 自动决策）。
 *   **业务感知**：内置业务规则，自动将问题映射到正确的知识库（Finance, Tech, HR, General）。
+*   **可配置 Top-K**：支持用户指定返回结果的数量（默认为 3 条），Agent 会自动解析并在 API 调用中应用。
 *   **结构化输出**：直接返回 JSON 格式的原始数据，包含置信度、来源、检索方式等元数据，便于下游系统集成。
 *   **Mock 知识库**：内置一个模拟的向量数据库 API，用于演示 RAG 流程，无需复杂的本地向量库部署。
 *   **Langfuse 监控**：集成了 Langfuse Tracing，可实时监控 Agent 的思考过程和 Latency。
@@ -79,9 +80,13 @@ User: 公司的年假有多少天？
 Result: [
   {
     "content": "服务满1年以上的员工享有15天年假。",
-    "confidence_score": 0.95,
-    "source": "knowledge_base (hr)",
-    "retrieval_method": "hybrid"
+    "metadata": {
+        "confidence_score": 0.95,
+        "source": "knowledge_base (hr)",
+        "filename": "Employee_Handbook_2024.pdf",
+        "page": 25,
+        "keywords": ["leave", "vacation"]
+    }
   }
 ]
 ```
@@ -95,9 +100,13 @@ User: 错误码 500 是什么意思？
 Result: [
   {
     "content": "错误码500通常表示内部服务器错误，请检查日志。",
-    "confidence_score": 0.99,
-    "source": "knowledge_base (tech)",
-    "retrieval_method": "keyword"
+    "metadata": {
+        "confidence_score": 0.99,
+        "source": "knowledge_base (tech)",
+        "filename": "Error_Codes_Manual.pdf",
+        "page": 88,
+        "keywords": ["error 500", "troubleshooting"]
+    }
   }
 ]
 ```
@@ -111,10 +120,35 @@ User: 帮我查一下北京今天的天气
 Result: [
   {
     "content": "Summary: 北京今日天气晴朗，气温 5~15度...",
-    "confidence_score": "N/A",
-    "source": "internet (duckduckgo)",
-    "retrieval_method": "from web"
+    "metadata": {
+        "confidence_score": "N/A",
+        "source": "internet (duckduckgo)",
+        "filename": "N/A",
+        "page": "N/A",
+        "keywords": "N/A"
+    }
   }
+]
+```
+
+**场景 4：指定结果数量 (Top-K)**
+```text
+User: 查一下财务方面的信息，给我5条结果
+
+🤖 [Agent Decision] Tool: knowledge_base_search (library='finance', top_k=5)
+...
+Result: [
+  {
+    "content": "第三季度收入同比增长15%。",
+    "metadata": {
+        "confidence_score": 0.98,
+        "source": "knowledge_base (finance)",
+        "filename": "Q3_Financial_Report.pdf",
+        "page": 12,
+        "keywords": ["revenue", "growth"]
+    }
+  },
+  ... (共5条结果)
 ]
 ```
 

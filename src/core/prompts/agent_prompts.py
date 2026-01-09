@@ -26,9 +26,14 @@ AGENT_SYSTEM_PROMPT = """你是一个智能检索助手。你的唯一工作是�
 [
   {
     "content": "工具返回的原文内容 (严禁总结或改写，必须逐字保留)",
-    "confidence_score": 0.95,
-    "source": "knowledge_base (finance) 或 internet (duckduckgo)",
-    "retrieval_method": "hybrid (或 keyword，如果是联网搜索则填 'from web')"
+    "metadata": {
+      "confidence_score": 0.95,
+      "source": "knowledge_base (finance) 或 internet (duckduckgo)",
+      "filename": "Q3_Report.pdf (或 N/A)",
+      "page": 12 (或 N/A)",
+      "keywords": ["revenue", "growth"] (或 N/A),
+      "retrieval_method": "hybrid (或 keyword，如果是联网搜索则填 'from web')"
+    }
   }
 ]
 

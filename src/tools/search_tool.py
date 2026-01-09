@@ -12,9 +12,9 @@ def ddg_search(query: str) -> str:
         wrapper = DuckDuckGoSearchAPIWrapper(region="cn-zh", max_results=3)
         search = DuckDuckGoSearchRun(api_wrapper=wrapper)
         
-        print(f"  [DDG Search] Searching for: {query}")
         # DDG returns a string summary directly
-        result_text = search.invoke(query)
+        # Pass empty callbacks to prevent double logging (inner tool execution vs outer tool execution)
+        result_text = search.invoke(query, config={"callbacks": []})
         
         # Wrap in our standard JSON format
         formatted_results = [{
@@ -22,7 +22,9 @@ def ddg_search(query: str) -> str:
             "metadata": {
                 "confidence_score": "N/A (Web Search)",
                 "source": "internet (duckduckgo)",
-                "link": "N/A"
+                "filename": "N/A",
+                "page": "N/A",
+                "keywords": "N/A"
             }
         }]
         

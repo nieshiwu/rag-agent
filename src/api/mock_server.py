@@ -6,8 +6,9 @@ app = FastAPI()
 
 class SearchRequest(BaseModel):
     library_name: str
-    search_method: str
+    search_method: str = "hybrid"
     query: str
+    top_k: int = 3
 
 @app.post("/search")
 async def search_knowledge_base(request: SearchRequest):
@@ -16,26 +17,26 @@ async def search_knowledge_base(request: SearchRequest):
     # Simulate database results
     mock_data = {
         "finance": [
-            "第三季度收入同比增长15%。",
-            "2024财年的预算已获董事会批准。",
-            "由于市场波动，股票表现保持稳定。",
-            "第四季度的财务审计将于下周开始。"
+            {"content": "第三季度收入同比增长15%。", "metadata": {"filename": "Q3_Financial_Report.pdf", "page": 12, "keywords": ["revenue", "growth"]}},
+            {"content": "2024财年的预算已获董事会批准。", "metadata": {"filename": "FY24_Budget_Approval.docx", "page": 1, "keywords": ["budget", "board"]}},
+            {"content": "由于市场波动，股票表现保持稳定。", "metadata": {"filename": "Market_Analysis_2023.pdf", "page": 45, "keywords": ["stock", "market"]}},
+            {"content": "第四季度的财务审计将于下周开始。", "metadata": {"filename": "Audit_Schedule_Q4.xlsx", "page": "Sheet1", "keywords": ["audit", "schedule"]}}
         ],
         "tech": [
-            "API服务器目前运行时间为99.9%。",
-            "新的人工智能模型'Alpha-X'正在部署中。",
-            "由于维护，数据库将在周日停机。",
-            "前端团队已将React版本升级至18.0。",
-            "错误码500通常表示内部服务器错误，请检查日志。"
+            {"content": "API服务器目前运行时间为99.9%。", "metadata": {"filename": "Server_Health_Dashboard.html", "page": "N/A", "keywords": ["uptime", "api"]}},
+            {"content": "新的人工智能模型'Alpha-X'正在部署中。", "metadata": {"filename": "AI_Deployment_Plan_v2.pdf", "page": 3, "keywords": ["AI", "deployment"]}},
+            {"content": "由于维护，数据库将在周日停机。", "metadata": {"filename": "Maintenance_Notice_DB.txt", "page": 1, "keywords": ["database", "downtime"]}},
+            {"content": "前端团队已将React版本升级至18.0。", "metadata": {"filename": "Frontend_Changelog.md", "page": 102, "keywords": ["react", "upgrade"]}},
+            {"content": "错误码500通常表示内部服务器错误，请检查日志。", "metadata": {"filename": "Error_Codes_Manual.pdf", "page": 88, "keywords": ["error 500", "troubleshooting"]}}
         ],
         "general": [
-            "公司野餐定于下周五举行。",
-            "关于远程办公的新HR政策将于下月生效。"
+            {"content": "公司野餐定于下周五举行。", "metadata": {"filename": "Company_Events_Calendar.ics", "page": "N/A", "keywords": ["picnic", "event"]}},
+            {"content": "关于远程办公的新HR政策将于下月生效。", "metadata": {"filename": "Remote_Work_Policy_Update.pdf", "page": 2, "keywords": ["remote work", "policy"]}}
         ],
         "hr": [
-            "服务满1年以上的员工享有15天年假。",
-            "病假超过3天需提供医生证明。",
-            "绩效考核每半年进行一次，分别在6月和12月。"
+            {"content": "服务满1年以上的员工享有15天年假。", "metadata": {"filename": "Employee_Handbook_2024.pdf", "page": 25, "keywords": ["leave", "vacation"]}},
+            {"content": "病假超过3天需提供医生证明。", "metadata": {"filename": "Sick_Leave_Policy.docx", "page": 4, "keywords": ["sick leave", "medical certificate"]}},
+            {"content": "绩效考核每半年进行一次，分别在6月和12月。", "metadata": {"filename": "Performance_Review_Guidelines.pdf", "page": 7, "keywords": ["performance", "review"]}}
         ]
     }
     
@@ -46,19 +47,26 @@ async def search_knowledge_base(request: SearchRequest):
         return {"results": [], "message": f"No data found for library '{request.library_name}'"}
     
     # Simple filtering simulation
-    filtered_results = [r for r in results if any(word.lower() in r.lower() for word in request.query.split())]
+    # Handle both string (legacy) and dict items
+    filtered_results = []
+    for r in results:
+        text = r if isinstance(r, str) else r.get("content", "")
+        if any(word.lower() in text.lower() for word in request.query.split()):
+            filtered_results.append(r)
     
     # If no keyword match, return all (mocking semantic search returning something relevant)
-    # Ensure final_results is a list of strings first
     raw_results = filtered_results if filtered_results else results
     
     # Calculate confidence scores and add metadata
     enriched_results = []
     query_words = set(request.query.lower().split())
     
-    for content in raw_results:
+    for item in raw_results:
+        # Extract content string
+        content = item if isinstance(item, str) else item.get("content", "")
+        item_metadata = {} if isinstance(item, str) else item.get("metadata", {})
+        
         # Simulate confidence score based on keyword overlap
-        # content is a string here
         content_words = set(content.lower().split())
         if not query_words:
             score = 0.5 # Default score if query is empty
@@ -72,12 +80,19 @@ async def search_knowledge_base(request: SearchRequest):
             "content": content,
             "confidence_score": round(score, 2),
             "source_type": "knowledge_base",
-            "library": request.library_name
+            "library": request.library_name,
+            "metadata": item_metadata
         })
+    
+    # Sort by confidence score descending
+    enriched_results.sort(key=lambda x: x["confidence_score"], reverse=True)
+    
+    # Apply top_k limit
+    final_results = enriched_results[:request.top_k]
     
     return {
         "query": request.query,
-        "results": enriched_results
+        "results": final_results
     }
 
 if __name__ == "__main__":

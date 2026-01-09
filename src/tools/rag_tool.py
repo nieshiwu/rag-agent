@@ -13,6 +13,7 @@ class RAGToolInput(BaseModel):
     query: str = Field(description="用户的原始问题或查询字符串。")
     library_name: str = Field(description="要搜索的具体知识库名称（例如：'finance'财务, 'tech'技术, 'general'通用, 'hr'人事）。")
     search_method: str = Field(description="使用的搜索方式，如 'keyword'关键词, 'semantic'语义, 或 'hybrid'混合。", default="hybrid")
+    top_k: int = Field(description="期望返回的结果数量。", default=3)
 
 class KnowledgeBaseTool(BaseTool):
     name: str = "knowledge_base_search"
@@ -38,28 +39,23 @@ class KnowledgeBaseTool(BaseTool):
             # Fallback if LLM fails or is not configured
             return query
 
-    def _run(self, query: str, library_name: str, search_method: str = "hybrid") -> str:
+    def _run(self, query: str, library_name: str, search_method: str = "hybrid", top_k: int = 3) -> str:
         """Use the tool."""
-        print(f"\n  [RAG Internal] 1. Rewriting Query...")
-        # 1. Rewrite Query
-        rewritten_query = self._rewrite_query(query)
-        print(f"  [RAG Internal]    Original: '{query}' -> Rewritten: '{rewritten_query}'")
-
-        # 2. Call HTTP Interface
-        payload = {
-            "library_name": library_name,
-            "search_method": search_method,
-            "query": rewritten_query
-        }
-        print(f"  [RAG Internal] 2. Calling Knowledge Base API...")
-        print(f"  [RAG Internal]    URL: {self.api_url}  Payload: {json.dumps(payload, ensure_ascii=False)}")
-
         try:
+            # 1. Query Rewriting (Optional, for better recall)
+            # In a real system, you might use an LLM to rewrite "it" to "annual leave policy"
+            # Here we just use the raw query or simple rule-based modification
+            
+            payload = {
+                "library_name": library_name,
+                "search_method": search_method,
+                "query": query,
+                "top_k": top_k
+            }
+            
             response = requests.post(self.api_url, json=payload, timeout=10)
             response.raise_for_status()
             data = response.json()
-            print(f"  [RAG Internal] 3. API Response Received")
-            print(f"  [RAG Internal]    Status: {response.status_code}")
             
             # Format output with clear confidence scores
             results = data.get("results", [])
@@ -75,32 +71,37 @@ class KnowledgeBaseTool(BaseTool):
                     score = 0.5 # Default fallback score
                     source_type = "knowledge_base"
                     library = library_name
+                    raw_metadata = {}
                 else:
                     # Handle new dict format
                     content = item.get("content", "")
                     score = item.get("confidence_score", 0.0)
                     source_type = item.get("source_type", "knowledge_base")
                     library = item.get("library", library_name)
+                    raw_metadata = item.get("metadata", {})
+                
+                # Default metadata fields
+                final_metadata = {
+                    "confidence_score": score,
+                    "source": f"{source_type} ({library})",
+                    "filename": raw_metadata.get("filename", "N/A"),
+                    "page": raw_metadata.get("page", "N/A"),
+                    "keywords": raw_metadata.get("keywords", "N/A")
+                }
                 
                 formatted_output.append({
                     "content": content,
-                    "metadata": {
-                        "confidence_score": score,
-                        "source": f"{source_type} ({library})"
-                    }
+                    "metadata": final_metadata
                 })
             
             resp_str = json.dumps(formatted_output, ensure_ascii=False, indent=2)
-            display_str = resp_str[:200] + "..." if len(resp_str) > 200 else resp_str
-            # print(f"  [RAG Internal]    Data: {display_str}\n")
             
             return resp_str
         except Exception as e:
             error_msg = f"Error connecting to knowledge base: {str(e)}"
-            print(f"  [RAG Internal] Error: {error_msg}")
             return error_msg
 
-    async def _arun(self, query: str, library_name: str, search_method: str = "hybrid") -> str:
+    async def _arun(self, query: str, library_name: str, search_method: str = "hybrid", top_k: int = 3) -> str:
         """Use the tool asynchronously."""
         # For simplicity, calling sync implementation here, but in production should be async
-        return self._run(query, library_name, search_method)
+        return self._run(query, library_name, search_method, top_k)

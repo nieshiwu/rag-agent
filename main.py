@@ -51,8 +51,9 @@ def main():
                 print("\nAgent processing...")
                 # Use LangGraph input format: list of messages
                 # Pass callback handler to invoke config
+                from langchain_core.messages import HumanMessage
                 response = agent_executor.invoke(
-                    {"messages": [("user", user_input)]},
+                    {"messages": [HumanMessage(content=user_input)]},
                     config={"callbacks": [AgentCallbackHandler(), langfuse_handler]}
                 )
                 
