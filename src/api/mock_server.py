@@ -6,7 +6,7 @@ app = FastAPI()
 
 class SearchRequest(BaseModel):
     library_name: str
-    search_method: str = "hybrid"
+    search_method: str
     query: str
     top_k: int = 3
 
@@ -23,11 +23,11 @@ async def search_knowledge_base(request: SearchRequest):
             {"content": "第四季度的财务审计将于下周开始。", "metadata": {"filename": "Audit_Schedule_Q4.xlsx", "page": "Sheet1", "keywords": ["audit", "schedule"]}}
         ],
         "tech": [
-            {"content": "API服务器目前运行时间为99.9%。", "metadata": {"filename": "Server_Health_Dashboard.html", "page": "N/A", "keywords": ["uptime", "api"]}},
+            {"content": "API服务器目前运行时间为99.9%。", "confidence_score": 0.99, "metadata": {"filename": "Server_Health_Dashboard.html", "page": "N/A", "keywords": ["uptime", "api"]}},
             {"content": "新的人工智能模型'Alpha-X'正在部署中。", "metadata": {"filename": "AI_Deployment_Plan_v2.pdf", "page": 3, "keywords": ["AI", "deployment"]}},
             {"content": "由于维护，数据库将在周日停机。", "metadata": {"filename": "Maintenance_Notice_DB.txt", "page": 1, "keywords": ["database", "downtime"]}},
             {"content": "前端团队已将React版本升级至18.0。", "metadata": {"filename": "Frontend_Changelog.md", "page": 102, "keywords": ["react", "upgrade"]}},
-            {"content": "错误码500通常表示内部服务器错误，请检查日志。", "metadata": {"filename": "Error_Codes_Manual.pdf", "page": 88, "keywords": ["error 500", "troubleshooting"]}}
+            {"content": "错误码500通常表示内部服务器错误，请检查日志。", "confidence_score": 0.95, "metadata": {"filename": "Error_Codes_Manual.pdf", "page": 88, "keywords": ["error 500", "troubleshooting"]}}
         ],
         "general": [
             {"content": "公司野餐定于下周五举行。", "metadata": {"filename": "Company_Events_Calendar.ics", "page": "N/A", "keywords": ["picnic", "event"]}},
@@ -66,26 +66,51 @@ async def search_knowledge_base(request: SearchRequest):
         content = item if isinstance(item, str) else item.get("content", "")
         item_metadata = {} if isinstance(item, str) else item.get("metadata", {})
         
-        # Simulate confidence score based on keyword overlap
-        content_words = set(content.lower().split())
-        if not query_words:
-            score = 0.5 # Default score if query is empty
+        # Determine confidence score
+        # 1. If item already has a confidence_score (simulating retrieval engine return), use it.
+        # 2. Otherwise, calculate a simulated one.
+        if isinstance(item, dict) and "confidence_score" in item:
+            score = item["confidence_score"]
         else:
-            overlap = len(query_words.intersection(content_words))
-            # Basic normalization: overlap / len(query)
-            # Add base score of 0.6 to simulate vector search baseline
-            score = min(0.99, 0.6 + (overlap / len(query_words)) * 0.4)
+            # Simulate confidence score based on keyword overlap
+            content_words = set(content.lower().split())
+            if not query_words:
+                score = 0.5 # Default score if query is empty
+            else:
+                overlap = len(query_words.intersection(content_words))
+                # Basic normalization: overlap / len(query)
+                # Add base score of 0.6 to simulate vector search baseline
+                score = min(0.99, 0.6 + (overlap / len(query_words)) * 0.4)
+                score = round(score, 2)
             
-        enriched_results.append({
+        result_entry = {
             "content": content,
-            "confidence_score": round(score, 2),
             "source_type": "knowledge_base",
             "library": request.library_name,
             "metadata": item_metadata
-        })
+        }
+        
+        # Only add confidence_score if it was present in source or calculated here
+        # However, to test the client-side fallback, we should conditionally return it.
+        # If the source had it, we return it. If we calculated it, we return it.
+        # Wait, the user wants "some return confidence, some do not".
+        # So we should ONLY return 'confidence_score' in the response if the mock item explicitly had it.
+        # IF the mock item didn't have it, we should NOT include it in the response, 
+        # so the client (rag_tool) is forced to calculate it.
+        
+        if isinstance(item, dict) and "confidence_score" in item:
+             result_entry["confidence_score"] = item["confidence_score"]
+        
+        # BUT, previously we were ALWAYS calculating it. 
+        # To simulate the hybrid scenario:
+        # - Items with 'confidence_score' -> Return it.
+        # - Items without -> Do NOT return 'confidence_score' field.
+        
+        enriched_results.append(result_entry)
     
     # Sort by confidence score descending
-    enriched_results.sort(key=lambda x: x["confidence_score"], reverse=True)
+    # Handle cases where confidence_score might be missing for sorting
+    enriched_results.sort(key=lambda x: x.get("confidence_score", 0.0), reverse=True)
     
     # Apply top_k limit
     final_results = enriched_results[:request.top_k]

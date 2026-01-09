@@ -1,19 +1,20 @@
 import json
 import requests
+import re
 from typing import Optional, Type
 from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from src.core.prompts.tool_prompts import QUERY_REWRITE_PROMPT
+from src.core.prompts.tool_prompts import QUERY_REWRITE_PROMPT, RELEVANCE_SCORE_PROMPT
 
 # 定义输入参数的 Schema
 class RAGToolInput(BaseModel):
     query: str = Field(description="用户的原始问题或查询字符串。")
     library_name: str = Field(description="要搜索的具体知识库名称（例如：'finance'财务, 'tech'技术, 'general'通用, 'hr'人事）。")
     search_method: str = Field(description="使用的搜索方式，如 'keyword'关键词, 'semantic'语义, 或 'hybrid'混合。", default="hybrid")
-    top_k: int = Field(description="期望返回的结果数量。", default=3)
+    top_k: int = Field(description="期望返回的结果数量（默认为3，调研类问题建议5-10，事实类问题建议1）。", default=3)
 
 class KnowledgeBaseTool(BaseTool):
     name: str = "knowledge_base_search"
@@ -38,6 +39,22 @@ class KnowledgeBaseTool(BaseTool):
         except Exception as e:
             # Fallback if LLM fails or is not configured
             return query
+
+    def _calculate_relevance(self, query: str, content: str) -> float:
+        """
+        Uses LLM to calculate relevance score between query and content.
+        """
+        try:
+            chain = RELEVANCE_SCORE_PROMPT | self.llm | StrOutputParser()
+            score_str = chain.invoke({"query": query, "document": content})
+            # Clean up string to ensure it's a float
+            match = re.search(r"(\d+(\.\d+)?)", score_str)
+            if match:
+                score = float(match.group(1))
+                return min(1.0, max(0.0, score))
+            return 0.5 # Fallback
+        except Exception:
+            return 0.5
 
     def _run(self, query: str, library_name: str, search_method: str = "hybrid", top_k: int = 3) -> str:
         """Use the tool."""
@@ -68,21 +85,35 @@ class KnowledgeBaseTool(BaseTool):
                 if isinstance(item, str):
                     # Handle legacy/fallback string format
                     content = item
-                    score = 0.5 # Default fallback score
+                    score = self._calculate_relevance(query, content)
+                    score_source = "llm_eval"
                     source_type = "knowledge_base"
                     library = library_name
                     raw_metadata = {}
                 else:
                     # Handle new dict format
                     content = item.get("content", "")
-                    score = item.get("confidence_score", 0.0)
+                    if "confidence_score" in item:
+                        score = item.get("confidence_score")
+                        score_source = "knowledge_base"
+                    else:
+                        score = self._calculate_relevance(query, content)
+                        score_source = "llm_eval"
+                        
                     source_type = item.get("source_type", "knowledge_base")
                     library = item.get("library", library_name)
                     raw_metadata = item.get("metadata", {})
                 
                 # Default metadata fields
+                # Add score_source suffix ONLY if it's from llm_eval
+                
+                if score_source == "llm_eval":
+                    final_score_display = f"{score} (AI Eval)"
+                else:
+                    final_score_display = score
+                
                 final_metadata = {
-                    "confidence_score": score,
+                    "confidence_score": final_score_display,
                     "source": f"{source_type} ({library})",
                     "filename": raw_metadata.get("filename", "N/A"),
                     "page": raw_metadata.get("page", "N/A"),
