@@ -6,7 +6,7 @@ from src.core.prompts.agent_prompts import AGENT_SYSTEM_PROMPT
 
 def create_rag_agent():
     # 1. Initialize LLM
-    llm = get_llm()
+    llm = get_llm(0.9)
 
     # 2. Define Tools
     rag_tool = KnowledgeBaseTool(llm=llm) 

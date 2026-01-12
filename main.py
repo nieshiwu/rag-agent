@@ -56,27 +56,28 @@ def main():
                     {"messages": [HumanMessage(content=user_input)]},
                     config={"callbacks": [AgentCallbackHandler(), langfuse_handler]}
                 )
-                
+                # print("respnse*******************************")
+                print(response['messages'][-1].content)
                 # --- Visualization is now handled by AgentCallbackHandler in real-time ---
 
-                # Check available keys in response for debugging if needed
-                if 'messages' in response:
-                    # Handle case where response is a list of messages (LangGraph/new LangChain behavior)
-                    messages = response['messages']
-                    if messages and hasattr(messages[-1], 'content'):
-                         print(f"\nAgent: {messages[-1].content}\n")
-                    else:
-                         print(f"\nAgent (Raw Messages): {messages}\n")
-                else:
-                    # Fallback for other potential return keys like 'return_values' or raw string
-                    print(f"\nAgent (Debug): {response}\n")
+                # # Check available keys in response for debugging if needed
+                # if 'messages' in response:
+                #     # Handle case where response is a list of messages (LangGraph/new LangChain behavior)
+                #     messages = response['messages']
+                #     if messages and hasattr(messages[-1], 'content'):
+                #          print(f"\nAgent: {messages[-1].content}\n")
+                #     else:
+                #          print(f"\nAgent (Raw Messages): {messages}\n")
+                # else:
+                #     # Fallback for other potential return keys like 'return_values' or raw string
+                #     print(f"\nAgent (Debug): {response}\n")
             except Exception as e:
                 print(f"Error: {e}")
                 
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
-        print("Flushing Langfuse traces...")
+        # print("Flushing Langfuse traces...")
         langfuse_handler.langfuse.flush()
         print("Terminating mock server...")
         server_process.terminate()

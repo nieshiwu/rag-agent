@@ -67,7 +67,7 @@ class AgentCallbackHandler(BaseCallbackHandler):
             content_str = str(output)
             
         # Truncate output if too long
-        display_content = content_str[:300] + "..." if len(content_str) > 300 else content_str
+        display_content = content_str[:100] + "..." if len(content_str) > 100 else content_str
         print(f"   Result: {display_content}")
 
     def on_agent_action(self, action: Any, **kwargs: Any) -> Any:

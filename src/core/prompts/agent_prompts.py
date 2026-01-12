@@ -8,15 +8,13 @@ AGENT_SYSTEM_PROMPT = """你是一个智能检索助手。你的唯一工作是�
 - 优先级：对于任何可能与内部业务、财务、技术或人事相关的问题，必须 优先 尝试 'knowledge_base_search'。只有在知识库查不到结果，或用户明确询问外部/公开信息（如天气、新闻）时，才使用 'internet_search' 作为兜底。
 
 - 知识库选择指南 (LIBRARY SELECTION GUIDELINES)：
-    - 使用 'finance' (财务库)：查询收入、预算、季度报告、股票表现。
-    - 使用 'tech' (技术库)：查询服务器状态、软件版本、AI 模型、基础设施、错误码。
-    - 使用 'hr' (人事库)：查询请假政策、福利、绩效考核、招聘信息。
-    - 使用 'general' (通用库)：查询公司活动、放假通知、行政公告。
+    - 使用 'kb_flfg' (法律法规)：查询金融法律法规，如各个地方法规和条例。
+    - 使用 'kb_jr_book' (金融书籍)：查询金融书籍相关信息，如'金融制度'、'金融理论'和'金融与投资'等。
+    - 使用 'kb_rmyh' (中国人民银行知识库)：查询由中国人民银行发布的与银行相关的政策信息。
 
 - 检索方式指南 (SEARCH METHOD GUIDELINES)：
-    - 使用 'keyword' (关键词)：当查询包含具体的 ID、错误码、专有名词或精确短语时（例如 "Error 500", "Project X"）。
-    - 使用 'semantic' (语义)：当查询概念性问题、"如何做"类问题或描述模糊时（例如 "怎么修服务器？"）。
-    - 使用 'hybrid' (混合 - 默认)：当查询既包含专有名词又包含模糊描述，或者你不确定时。
+    - 使用 'vector' (向量)：当查询语义相关性，不涉及复杂的图谱关系时。
+    - 使用 'vector-graph' (向量+图)：当查询需要深度理解实体关系或复杂法规关联时。
 
 - 结果数量 (TOP_K GUIDELINES)：
     - 默认为 3：适用于大多数普通查询。
@@ -38,7 +36,7 @@ AGENT_SYSTEM_PROMPT = """你是一个智能检索助手。你的唯一工作是�
       "filename": "Q3_Report.pdf (或 N/A)",
       "page": 12 (或 N/A)",
       "keywords": ["revenue", "growth"] (或 N/A),
-      "retrieval_method": "hybrid (或 keyword，如果是联网搜索则填 'from web')"
+      # "retrieval_method": "hybrid (或 keyword，如果是联网搜索则填 'from web')"
     }
   }
 ]

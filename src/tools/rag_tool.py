@@ -12,19 +12,20 @@ from src.core.prompts.tool_prompts import QUERY_REWRITE_PROMPT, RELEVANCE_SCORE_
 # 定义输入参数的 Schema
 class RAGToolInput(BaseModel):
     query: str = Field(description="用户的原始问题或查询字符串。")
-    library_name: str = Field(description="要搜索的具体知识库名称（例如：'finance'财务, 'tech'技术, 'general'通用, 'hr'人事）。")
-    search_method: str = Field(description="使用的搜索方式，如 'keyword'关键词, 'semantic'语义, 或 'hybrid'混合。", default="hybrid")
+    library_name: str = Field(description="要搜索的具体知识库名称（例如：'kb_flfg'金融法律法规 ,'kb_jr_book'金融书籍包括金融制度、金融理论等，或'kb_rmyh'人民银行相关）。")
+    search_method: str = Field(description="使用的搜索方式，如'vector'向量, 或 'vector-graph'向量+图。", default="vector-graph")
     top_k: int = Field(description="期望返回的结果数量（默认为3，调研类问题建议5-10，事实类问题建议1）。", default=3)
 
 class KnowledgeBaseTool(BaseTool):
     name: str = "knowledge_base_search"
-    description: str = "使用此工具搜索内部知识库（财务、技术、通用、人事）。必须指定知识库名称和搜索方式。"
+    description: str = "使用此工具搜索内部知识库（财务、金融条例）。必须指定知识库名称和搜索方式。"
     args_schema: Type[BaseModel] = RAGToolInput
     
-    api_url: str = "http://localhost:8000/search" # Default mock URL
+    api_url: str = "http://192.168.0.197:28011/kb/search" 
+    # api_url: str = "http://localhost:6666/search"
     llm: Optional[ChatOpenAI] = None
 
-    def __init__(self, api_url: str = "http://localhost:8000/search", llm: Optional[ChatOpenAI] = None):
+    def __init__(self, api_url: str = api_url, llm: Optional[ChatOpenAI] = None):
         super().__init__()
         self.api_url = api_url
         self.llm = llm or ChatOpenAI(temperature=0, model="gpt-3.5-turbo")
@@ -70,48 +71,57 @@ class KnowledgeBaseTool(BaseTool):
                 "top_k": top_k
             }
             
-            response = requests.post(self.api_url, json=payload, timeout=10)
+            response = requests.post(self.api_url, json=payload, timeout=30)
             response.raise_for_status()
             data = response.json()
+            # print(data) # Reduce console noise
             
             # Format output with clear confidence scores
-            results = data.get("results", [])
-            formatted_output = []
+            # Handle both "data" (new API) and "results" (old/mock API) keys
+            results = data.get("data") or data.get("results") or []
             
+            # Ensure results is a list. If API returns a single dict object, wrap it in a list.
+            if isinstance(results, dict):
+                results = [results]
+            elif not isinstance(results, list):
+                # Fallback for unexpected types (e.g. None or str), though .get([], []) handles None -> []
+                results = []
+
             if not results:
                 return "No results found in knowledge base."
-                
+            
+            formatted_output = []
+            
             for item in results:
+                # Basic type check
                 if isinstance(item, str):
-                    # Handle legacy/fallback string format
                     content = item
-                    score = self._calculate_relevance(query, content)
-                    score_source = "llm_eval"
-                    source_type = "knowledge_base"
-                    library = library_name
                     raw_metadata = {}
+                    score_source = "llm_eval"
+                    score = self._calculate_relevance(query, content)
                 else:
-                    # Handle new dict format
                     content = item.get("content", "")
-                    if "confidence_score" in item:
-                        score = item.get("confidence_score")
+                    raw_metadata = item.get("metadata", {})
+
+                    # Extract Confidence Score (Priority: Metadata > LLM Eval)
+                    if "confidence_score" in raw_metadata:
+                        score = raw_metadata["confidence_score"]
                         score_source = "knowledge_base"
                     else:
                         score = self._calculate_relevance(query, content)
                         score_source = "llm_eval"
-                        
-                    source_type = item.get("source_type", "knowledge_base")
-                    library = item.get("library", library_name)
-                    raw_metadata = item.get("metadata", {})
                 
-                # Default metadata fields
-                # Add score_source suffix ONLY if it's from llm_eval
+                # Extract Source Type & Library (Priority: Metadata > Defaults)
+                source_type = raw_metadata.get("source_type", "knowledge_base")
+                library = raw_metadata.get("library", library_name)
                 
+                # Format Score Display
                 if score_source == "llm_eval":
                     final_score_display = f"{score} (AI Eval)"
                 else:
                     final_score_display = score
                 
+                # Construct Final Metadata
                 final_metadata = {
                     "confidence_score": final_score_display,
                     "source": f"{source_type} ({library})",
