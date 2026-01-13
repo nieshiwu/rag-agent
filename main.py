@@ -3,31 +3,30 @@ import sys
 import time
 import subprocess
 import threading
-from langfuse.callback import CallbackHandler
 from dotenv import load_dotenv
+from langfuse.langchain import CallbackHandler
 
 # Load environment variables explicitly at the start
 load_dotenv()
 langfuse_handler = CallbackHandler()
 
-
-def start_mock_server():
-    """Starts the mock server in a separate process."""
-    print("Starting mock knowledge base server...")
-    # Using sys.executable to ensure we use the same python interpreter
-    # Run as module to resolve imports correctly
-    # Updated path to src.api.mock_server
-    process = subprocess.Popen([sys.executable, "-m", "src.api.mock_server"], 
-                               stdout=subprocess.PIPE, 
-                               stderr=subprocess.PIPE)
-    time.sleep(2) # Give it a moment to start
-    return process
+# def start_mock_server():
+#     """Starts the mock server in a separate process."""
+#     print("Starting mock knowledge base server...")
+#     # Using sys.executable to ensure we use the same python interpreter
+#     # Run as module to resolve imports correctly
+#     # Updated path to src.api.mock_server
+#     process = subprocess.Popen([sys.executable, "-m", "src.api.mock_server"], 
+#                                stdout=subprocess.PIPE, 
+#                                stderr=subprocess.PIPE)
+#     time.sleep(2) # Give it a moment to start
+#     return process
 
 def main():
     print("Initializing Agentic RAG System...")
     
     # Start Mock Server
-    server_process = start_mock_server()
+    # server_process = start_mock_server()
     
     try:
         # Import here to avoid issues if dependencies are missing during initial setup
@@ -57,7 +56,7 @@ def main():
                     config={"callbacks": [AgentCallbackHandler(), langfuse_handler]}
                 )
                 # print("respnse*******************************")
-                print(response['messages'][-1].content)
+                print(f"\nAgent: {response['messages'][-1].content}")
                 # --- Visualization is now handled by AgentCallbackHandler in real-time ---
 
                 # # Check available keys in response for debugging if needed
@@ -77,11 +76,10 @@ def main():
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
-        # print("Flushing Langfuse traces...")
-        langfuse_handler.langfuse.flush()
-        print("Terminating mock server...")
-        server_process.terminate()
-        server_process.wait()
+        if hasattr(langfuse_handler, 'flush'):
+            langfuse_handler.flush()
+        elif hasattr(langfuse_handler, 'langfuse') and hasattr(langfuse_handler.langfuse, 'flush'):
+            langfuse_handler.langfuse.flush()
 
 if __name__ == "__main__":
     main()
